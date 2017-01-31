@@ -1,0 +1,13 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <h1>Your lucky number is </h1>
+    <div class="lucky">{{ number }}</div>
+{% endblock %}
+
+{% block stylesheets %}
+<style>
+ body{background-color:#f0f0f0}
+ div.lucky {padding:16px;background-color:#fff;font-size:48px;}
+</style>
+{% endblock %}
