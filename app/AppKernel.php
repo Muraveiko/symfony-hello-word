@@ -103,37 +103,45 @@ class AppKernel extends Kernel
         // диспатчеру , проходя последовательно стадии
 
         /*
-          ->dispatcher->dispatch(KernelEvents::REQUEST,GetResponseEvent)
-          если получен ответ, то он выводится и исполнение прекращается
-
-          ->resolver->getController($request) вызывается роутер
-          если не найден. то 404 ошибка
-
-
-          ->dispatcher->dispatch(KernelEvents::RESPONSE,FilterResponseEvent) проверяется возможность вызова (фильтер)
-          в процессе обработки контролер может быть переназначен
-
-          подготавливаются аргументы для вызова контролера
-
-          ->dispatcher->dispatch(KernelEvents::CONTROLLER_ARGUMENTS,FilterControllerArgumentsEvent) проверяются
-
-          $response = call_user_func_array($controller, $arguments); вызов контролера
-
-          ->dispatcher->dispatch(KernelEvents::VIEW,GetResponseForControllerResultEvent)
-
-           ->dispatcher->dispatch(KernelEvents::RESPONSE,FilterResponseEvent)
-           ->dispatcher->dispatch(KernelEvents::FINISH_REQUEST, new FinishRequestEvent
-
-           и на конец
-           возвращаем респонсе
-
-         p.s. dispatcher,resolver передаются в конструктор сервиса http_kernel инъекция описана в
-          vendor/symfony/symfony/src/Symfony/Bundle/FrameworkBundle/Resources/config/services.xml:12
-
-          Symfony\Component\EventDispatcher\ContainerAwareEventDispatcher
-
-          vendor/symfony/symfony/src/Symfony/Bundle/FrameworkBundle/Resources/config/web.xml:13
-          Symfony\Bundle\FrameworkBundle\Controller\ControllerResolver
+       $this->requestStack->push($request);
+        // request
+        $event = new GetResponseEvent($this, $request, $type);
+        $this->dispatcher->dispatch(KernelEvents::REQUEST, $event);
+        if ($event->hasResponse()) {
+            return $this->filterResponse($event->getResponse(), $request, $type);
+        }
+        // load controller
+        if (false === $controller = $this->resolver->getController($request)) {
+            throw new NotFoundHttpException(sprintf('Unable to find the controller for path "%s". The route is wrongly configured.', $request->getPathInfo()));
+        }
+        $event = new FilterControllerEvent($this, $controller, $request, $type);
+        $this->dispatcher->dispatch(KernelEvents::CONTROLLER, $event);
+        $controller = $event->getController();
+        // controller arguments
+        $arguments = $this->argumentResolver->getArguments($request, $controller);
+        $event = new FilterControllerArgumentsEvent($this, $controller, $arguments, $request, $type);
+        $this->dispatcher->dispatch(KernelEvents::CONTROLLER_ARGUMENTS, $event);
+        $controller = $event->getController();
+        $arguments = $event->getArguments();
+        // call controller
+        $response = call_user_func_array($controller, $arguments);
+        // view
+        if (!$response instanceof Response) {
+            $event = new GetResponseForControllerResultEvent($this, $request, $type, $response);
+            $this->dispatcher->dispatch(KernelEvents::VIEW, $event);
+            if ($event->hasResponse()) {
+                $response = $event->getResponse();
+            }
+            if (!$response instanceof Response) {
+                $msg = sprintf('The controller must return a response (%s given).', $this->varToString($response));
+                // the user may have forgotten to return something
+                if (null === $response) {
+                    $msg .= ' Did you forget to add a return statement somewhere in your controller?';
+                }
+                throw new \LogicException($msg);
+            }
+        }
+        return $this->filterResponse($response, $request, $type);
 
          */
 
